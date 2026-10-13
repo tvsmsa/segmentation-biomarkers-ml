@@ -1,0 +1,4 @@
+# Keep Ruff in sync with .pre-commit-config.yaml.
+# These tools require Python 3.11 or newer.
+ruff==0.17.0
+pre-commit==4.7.0

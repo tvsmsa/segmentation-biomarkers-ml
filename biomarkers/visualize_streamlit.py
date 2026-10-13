@@ -1,27 +1,30 @@
-import torch
-import numpy as np
+from enum import Enum
+
 import matplotlib.pyplot as plt
-from biomarkers.config import Config
+import numpy as np
 import streamlit as st
+import torch
 from transformers import SegformerForSemanticSegmentation
 
-from enum import Enum
+from biomarkers.config import Config
+
 
 class ModelType(Enum):
     SEGFORMER = "segformer"
 
+
 config = Config()
 
 CLASS_COLORS = {
-    1:  [1.0, 0.0, 0.0],
-    2:  [0.0, 1.0, 0.0],
-    3:  [0.0, 0.0, 1.0],
-    4:  [1.0, 1.0, 0.0],
-    5:  [1.0, 0.0, 1.0],
-    6:  [0.0, 1.0, 1.0],
-    7:  [0.5, 0.5, 0.5],
-    8:  [1.0, 0.5, 0.0],
-    9:  [0.5, 0.0, 0.5],
+    1: [1.0, 0.0, 0.0],
+    2: [0.0, 1.0, 0.0],
+    3: [0.0, 0.0, 1.0],
+    4: [1.0, 1.0, 0.0],
+    5: [1.0, 0.0, 1.0],
+    6: [0.0, 1.0, 1.0],
+    7: [0.5, 0.5, 0.5],
+    8: [1.0, 0.5, 0.0],
+    9: [0.5, 0.0, 0.5],
     10: [0.0, 0.5, 0.0],
     11: [0.5, 0.0, 0.0],
     12: [0.0, 0.0, 0.5],
@@ -34,20 +37,21 @@ ID_TO_CLASS[0] = "background"
 
 
 def load_model(model_path, model_type=ModelType.SEGFORMER, device="cpu"):
-    if model_type == ModelType.SEGFORMER: # Загружает модель SEGFORMER
+    if model_type == ModelType.SEGFORMER:  # Загружает модель SEGFORMER
         model = SegformerForSemanticSegmentation.from_pretrained(
             "nvidia/segformer-b2-finetuned-ade-512-512",
             num_labels=config.NUM_CLASSES,
-            ignore_mismatched_sizes=True
+            ignore_mismatched_sizes=True,
         ).to(device)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
-
     checkpoint = torch.load(model_path, map_location=device)
-    if 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
-        print(f"Epoch: {checkpoint.get('epoch', 'unknown')}, val_dice: {checkpoint.get('val_dice', 'unknown')}")
+    if "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+        print(
+            f"Epoch: {checkpoint.get('epoch', 'unknown')}, val_dice: {checkpoint.get('val_dice', 'unknown')}"
+        )
     else:
         model.load_state_dict(checkpoint)
 
@@ -55,8 +59,9 @@ def load_model(model_path, model_type=ModelType.SEGFORMER, device="cpu"):
     print("Model loaded")
     return model
 
+
 def load_image():
-    uploaded_file = st.file_uploader(label='Выберите изображение для распознавания')
+    uploaded_file = st.file_uploader(label="Выберите изображение для распознавания")
     if uploaded_file is not None:
         image = np.load(uploaded_file)
         img = image.astype(np.float32) / 255.0
@@ -105,17 +110,17 @@ def visualize_prediction(image, pred_mask, save_path=None):
 
     # Верхний ряд
     axes[0].imshow(image)
-    axes[0].set_title("Original Image", fontsize=14, fontweight='bold')
-    axes[0].axis('off')
+    axes[0].set_title("Original Image", fontsize=14, fontweight="bold")
+    axes[0].axis("off")
 
     axes[1].imshow(image)
     axes[1].imshow(colorize(pred_mask), alpha=0.5)
-    axes[1].set_title("Prediction (overlay)", fontsize=14, fontweight='bold')
-    axes[1].axis('off')
+    axes[1].set_title("Prediction (overlay)", fontsize=14, fontweight="bold")
+    axes[1].axis("off")
 
     axes[2].imshow(colorize(pred_mask))
-    axes[2].set_title("Predicted Mask", fontsize=14, fontweight='bold')
-    axes[2].axis('off')
+    axes[2].set_title("Predicted Mask", fontsize=14, fontweight="bold")
+    axes[2].axis("off")
 
     pred_classes = set(np.unique(pred_mask)) - {0}
     found = pred_classes
@@ -144,12 +149,12 @@ def main():
     DEVICE = torch.device("cpu")
     MODEL_TYPE = ModelType.SEGFORMER
     model = load_model(MODEL_PATH, MODEL_TYPE, DEVICE)
-    st.title('Сегментация изображений глазного дна')
+    st.title("Сегментация изображений глазного дна")
     image_tensor = load_image()
-    result = st.button('Распознать изображение')
+    result = st.button("Распознать изображение")
     if result:
         pred_mask, img_vis = predict(model, image_tensor, MODEL_TYPE, DEVICE)
-        fig, text = visualize_prediction(img_vis, pred_mask, save_path=f"vis2.png")
+        fig, text = visualize_prediction(img_vis, pred_mask, save_path="vis2.png")
         st.pyplot(fig)
         st.write(text)
 

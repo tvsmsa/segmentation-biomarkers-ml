@@ -1,16 +1,20 @@
 import os
 import time
+
+import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from transformers import SegformerForSemanticSegmentation
-from transformers import get_cosine_schedule_with_warmup
 from tqdm import tqdm
-import pandas as pd
+from transformers import (
+    SegformerForSemanticSegmentation,
+    get_cosine_schedule_with_warmup,
+)
+
 from biomarkers.config import Config
 from biomarkers.dataloader import ImageMaskDataset
-from biomarkers.utils_loss import TverskyLoss
 from biomarkers.metrics import dice_score_fast
+from biomarkers.utils_loss import TverskyLoss
 
 config = Config()
 torch.multiprocessing.set_start_method("spawn", force=True)
@@ -18,43 +22,68 @@ torch.multiprocessing.set_start_method("spawn", force=True)
 # Dice score для мультикласса
 
 
-#@torch.no_grad()
+# @torch.no_grad()
 # Основная функция обучения
 
+
 def train_fold(train_folds, val_fold, patience=5):
-    train_dfs = [pd.read_csv( f"D:\\aspirantura\\PROF\\npy_article_fold\\train_article_fold_{f}.csv") for f in train_folds]
+    train_dfs = [
+        pd.read_csv(
+            f"D:\\aspirantura\\PROF\\npy_article_fold\\train_article_fold_{f}.csv"
+        )
+        for f in train_folds
+    ]
     df_train = pd.concat(train_dfs).reset_index(drop=True)
-    df_val = pd.read_csv( f"D:\\aspirantura\\PROF\\npy_article_fold\\train_article_fold_{val_fold}.csv")
+    df_val = pd.read_csv(
+        f"D:\\aspirantura\\PROF\\npy_article_fold\\train_article_fold_{val_fold}.csv"
+    )
 
     train_dataset = ImageMaskDataset(df_train, augment_prob=0.5)
     val_dataset = ImageMaskDataset(df_val, augment_prob=0.0)
 
-    train_loader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE,
-                              shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=config.BATCH_SIZE,
-                            shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config.BATCH_SIZE,
+        shuffle=True,
+        num_workers=8,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+    )
 
     # Модель
     model = SegformerForSemanticSegmentation.from_pretrained(
         "nvidia/segformer-b2-finetuned-ade-512-512",
         num_labels=config.NUM_CLASSES,
-        ignore_mismatched_sizes=True
+        ignore_mismatched_sizes=True,
     ).to(config.DEVICE)
 
-    optimizer = torch.optim.AdamW([
-        # Backbone: low LR
-        {'params': model.segformer.encoder.parameters(), 'lr': 1e-5},
-        {'params': model.decode_head.parameters(), 'lr': 5e-4},        # Head: high LR
-    ])
+    optimizer = torch.optim.AdamW(
+        [
+            # Backbone: low LR
+            {"params": model.segformer.encoder.parameters(), "lr": 1e-5},
+            {"params": model.decode_head.parameters(), "lr": 5e-4},  # Head: high LR
+        ]
+    )
     gradient_accumulation_steps = 2
-    num_training_steps = (len(train_loader) //
-                          gradient_accumulation_steps) * config.EPOCHS
+    num_training_steps = (
+        len(train_loader) // gradient_accumulation_steps
+    ) * config.EPOCHS
 
     num_warmup_steps = int(0.1 * num_training_steps)  # 10% warmup
     scheduler = get_cosine_schedule_with_warmup(
-        optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps
+        optimizer,
+        num_warmup_steps=num_warmup_steps,
+        num_training_steps=num_training_steps,
     )
-    ce_loss = torch.nn.CrossEntropyLoss(ignore_index=config.IGNORE_INDEX).to(config.DEVICE)
+    ce_loss = torch.nn.CrossEntropyLoss(ignore_index=config.IGNORE_INDEX).to(
+        config.DEVICE
+    )
 
     tversky_loss = TverskyLoss(ignore_index=config.IGNORE_INDEX).to(config.DEVICE)
 
@@ -76,8 +105,9 @@ def train_fold(train_folds, val_fold, patience=5):
         start_time = time.time()
         loader_iter = tqdm(
             train_loader,
-            desc=f"Train Folds: {train_folds}, Val Fold: {val_fold} | Epoch {epoch+1}",
-            unit="batch")
+            desc=f"Train Folds: {train_folds}, Val Fold: {val_fold} | Epoch {epoch + 1}",
+            unit="batch",
+        )
 
         optimizer.zero_grad()
         for i, (imgs, masks) in enumerate(loader_iter):
@@ -89,7 +119,8 @@ def train_fold(train_folds, val_fold, patience=5):
             with torch.cuda.amp.autocast():
                 logits = model(pixel_values=imgs).logits
                 logits = F.interpolate(
-                    logits, masks.shape[-2:], mode="bilinear", align_corners=False)
+                    logits, masks.shape[-2:], mode="bilinear", align_corners=False
+                )
                 loss = combined_loss(logits, masks)
                 loss = loss / gradient_accumulation_steps
 
@@ -102,11 +133,12 @@ def train_fold(train_folds, val_fold, patience=5):
                 scheduler.step()
 
             running_loss += loss.item() * gradient_accumulation_steps
-            loader_iter.set_postfix({"avg_loss": running_loss / (i+1)})
+            loader_iter.set_postfix({"avg_loss": running_loss / (i + 1)})
 
         epoch_loss = running_loss / len(train_loader)
         print(
-            f"Epoch {epoch+1} finished, Avg Loss: {epoch_loss:.4f}, Time: {time.time()-start_time:.1f}s")
+            f"Epoch {epoch + 1} finished, Avg Loss: {epoch_loss:.4f}, Time: {time.time() - start_time:.1f}s"
+        )
 
         # Валидация
 
@@ -114,14 +146,18 @@ def train_fold(train_folds, val_fold, patience=5):
         all_dice = 0.0
         count = 0
         val_iter = tqdm(
-            val_loader, desc=f"Validation Fold {val_fold} Epoch {epoch+1}", unit="batch")
+            val_loader,
+            desc=f"Validation Fold {val_fold} Epoch {epoch + 1}",
+            unit="batch",
+        )
         for imgs, masks in val_iter:
             imgs = imgs.to(config.DEVICE)
             masks = masks.to(config.DEVICE)
             with torch.no_grad():
                 logits = model(pixel_values=imgs).logits
                 logits = F.interpolate(
-                    logits, masks.shape[-2:], mode="bilinear", align_corners=False)
+                    logits, masks.shape[-2:], mode="bilinear", align_corners=False
+                )
                 d = dice_score_fast(logits, masks)
                 all_dice += d
                 count += 1
@@ -132,14 +168,18 @@ def train_fold(train_folds, val_fold, patience=5):
         # Сохраняем чекпоинт каждой эпохи
 
         checkpoint_path = os.path.join(
-            checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth")
-        torch.save({
-            "epoch": epoch+1,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "loss": epoch_loss,
-            "val_dice": avg_dice
-        }, checkpoint_path)
+            checkpoint_dir, f"checkpoint_epoch_{epoch + 1}.pth"
+        )
+        torch.save(
+            {
+                "epoch": epoch + 1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": epoch_loss,
+                "val_dice": avg_dice,
+            },
+            checkpoint_path,
+        )
 
         # Обновляем лучшую модель
 
@@ -147,13 +187,16 @@ def train_fold(train_folds, val_fold, patience=5):
             best_dice = avg_dice
             epochs_no_improve = 0
             best_model_path = os.path.join(checkpoint_dir, "best_model.pth")
-            torch.save({
-                "epoch": epoch+1,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "loss": epoch_loss,
-                "val_dice": avg_dice
-            }, best_model_path)
+            torch.save(
+                {
+                    "epoch": epoch + 1,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": epoch_loss,
+                    "val_dice": avg_dice,
+                },
+                best_model_path,
+            )
             print(f"Best model updated! Dice: {best_dice:.4f}")
         else:
             epochs_no_improve += 1
@@ -162,7 +205,8 @@ def train_fold(train_folds, val_fold, patience=5):
 
         if epochs_no_improve >= patience:
             print(
-                f"Early stopping at epoch {epoch+1} (no improvement {patience} epochs).")
+                f"Early stopping at epoch {epoch + 1} (no improvement {patience} epochs)."
+            )
             break
 
     print(f"Training finished. Best Dice: {best_dice:.4f}")

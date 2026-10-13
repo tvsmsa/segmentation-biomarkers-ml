@@ -1,16 +1,14 @@
-
 # IMPORTS
 
 
 import os
+
 import cv2
 import numpy as np
 import pandas as pd
-
-from tqdm import tqdm
-from sklearn.model_selection import train_test_split
 from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
-
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 
 # CONFIG
 
@@ -21,7 +19,9 @@ from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 
 #  Для kaggle
 DATASET_CSV = r"/kaggle/input/datasets/andreikarabin/data-filter/aspirantura/PROF/dataset_final_clean.csv"
-AUGMENT_ROOT = r"/kaggle/input/datasets/andreikarabin/data-filter/aspirantura/PROF/augment"
+AUGMENT_ROOT = (
+    r"/kaggle/input/datasets/andreikarabin/data-filter/aspirantura/PROF/augment"
+)
 FOLD_TEMPLATE = r"/kaggle/input/datasets/andreikarabin/data-filter/aspirantura/PROF/train_article_fold_{}.csv"
 OUTPUT_ROOT = r"/kaggle/input/datasets/andreikarabin/data-filter/aspirantura/PROF/npy_article_fold"
 
@@ -43,11 +43,21 @@ RARE_CLASSES = [
 ]
 
 LABEL_COLUMNS = [
-    "hemorrhages", "hard_exudates", "microaneurysms", "drusen",
-    "soft_exudates", "edema", "fibrosis", "subretinal_hemorrhage",
-    "OD", "geographic_atrophy", "epiretinal_fibrosis",
-    "neovascularization", "venous_anomalies",
-    "laser_coagulates", "macular_hole"
+    "hemorrhages",
+    "hard_exudates",
+    "microaneurysms",
+    "drusen",
+    "soft_exudates",
+    "edema",
+    "fibrosis",
+    "subretinal_hemorrhage",
+    "OD",
+    "geographic_atrophy",
+    "epiretinal_fibrosis",
+    "neovascularization",
+    "venous_anomalies",
+    "laser_coagulates",
+    "macular_hole",
 ]
 
 # CLASS COLOR MAP
@@ -94,10 +104,10 @@ def binarize_columns(df, columns):
 
 def apply_clahe(img):
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
+    lightness, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    l = clahe.apply(l)
-    lab = cv2.merge((l, a, b))
+    lightness = clahe.apply(lightness)
+    lab = cv2.merge((lightness, a, b))
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
 
@@ -117,6 +127,7 @@ def convert_mask_to_id(mask_rgb):
 
     return mask_id
 
+
 # TRAIN / TEST SPLIT
 
 
@@ -128,15 +139,10 @@ def create_train_test_split():
     macular_df = df[df[TARGET_CLASS] == 1]
     non_macular_df = df[df[TARGET_CLASS] == 0]
 
-    macular_test = macular_df.sample(
-        n=min(4, len(macular_df)), random_state=42)
+    macular_test = macular_df.sample(n=min(4, len(macular_df)), random_state=42)
     macular_train = macular_df.drop(macular_test.index)
 
-    train_df, test_df = train_test_split(
-        non_macular_df,
-        test_size=0.2,
-        random_state=42
-    )
+    train_df, test_df = train_test_split(non_macular_df, test_size=0.2, random_state=42)
 
     train_df = pd.concat([train_df, macular_train])
     test_df = pd.concat([test_df, macular_test])
@@ -146,6 +152,7 @@ def create_train_test_split():
 
     print("Train:", len(train_df))
     print("Test:", len(test_df))
+
 
 # AUGMENTATION
 
@@ -166,14 +173,12 @@ def augment_train():
     new_rows = []
 
     for _, row in rare_df.iterrows():
-
         img = cv2.imread(row["image"])
         mask = cv2.imread(row["mask"])
 
         base = os.path.splitext(os.path.basename(row["image"]))[0]
 
         for flip_type, flip_code in [("hflip", 1), ("vflip", 0)]:
-
             img_flip = cv2.flip(img, flip_code)
             mask_flip = cv2.flip(mask, flip_code)
 
@@ -194,6 +199,7 @@ def augment_train():
 
     print("Augmentation done. New train size:", len(train_df))
 
+
 # MULTI-LABEL STRATIFIED K-FOLD
 
 
@@ -205,11 +211,7 @@ def create_folds():
     X = train_df.index.values
     y = train_df[LABEL_COLUMNS].values
 
-    mskf = MultilabelStratifiedKFold(
-        n_splits=3,
-        shuffle=True,
-        random_state=42
-    )
+    mskf = MultilabelStratifiedKFold(n_splits=3, shuffle=True, random_state=42)
 
     train_df["fold"] = -1
 
@@ -218,9 +220,10 @@ def create_folds():
 
     for f in range(3):
         fold_df = train_df[train_df.fold == f]
-        fold_df.to_csv(f"train_article_fold_{f+1}.csv", index=False)
+        fold_df.to_csv(f"train_article_fold_{f + 1}.csv", index=False)
 
     print("Folds created.")
+
 
 # PATCH EXTRACTION
 
@@ -236,7 +239,6 @@ def save_patches(df_fold, fold_num):
     new_rows = []
 
     for _, row in tqdm(df_fold.iterrows(), total=len(df_fold), desc=f"Fold {fold_num}"):
-
         img = apply_clahe(cv2.imread(row["image"]))
         mask_rgb = cv2.cvtColor(cv2.imread(row["mask"]), cv2.COLOR_BGR2RGB)
 
@@ -247,9 +249,8 @@ def save_patches(df_fold, fold_num):
 
         for top in range(0, h - PATCH_SIZE + 1, stride):
             for left in range(0, w - PATCH_SIZE + 1, stride):
-
-                img_patch = img[top:top+PATCH_SIZE, left:left+PATCH_SIZE]
-                mask_patch = mask_rgb[top:top+PATCH_SIZE, left:left+PATCH_SIZE]
+                img_patch = img[top : top + PATCH_SIZE, left : left + PATCH_SIZE]
+                mask_patch = mask_rgb[top : top + PATCH_SIZE, left : left + PATCH_SIZE]
 
                 mask_id = convert_mask_to_id(mask_patch)
 
@@ -269,12 +270,12 @@ def save_patches(df_fold, fold_num):
 
     new_df = pd.DataFrame(new_rows)
     new_df.to_csv(
-        os.path.join(OUTPUT_ROOT, f"train_article_fold_{fold_num}.csv"),
-        index=False
+        os.path.join(OUTPUT_ROOT, f"train_article_fold_{fold_num}.csv"), index=False
     )
 
 
 # MAIN
+
 
 def main():
 

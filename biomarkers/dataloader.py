@@ -1,7 +1,9 @@
-import torch
 import random
+
 import numpy as np
+import torch
 from torch.utils.data import Dataset
+
 from biomarkers.config import Config
 
 config = Config()
@@ -23,8 +25,8 @@ class ImageMaskDataset(Dataset):
         row = self.df.iloc[idx]
 
         # Загружаем уже предобработанные .npy
-        img = np.load(row["image"])           # uint8, HxWx3
-        mask = np.load(row["mask"])           # uint8, HxW
+        img = np.load(row["image"])  # uint8, HxWx3
+        mask = np.load(row["mask"])  # uint8, HxW
 
         # Геометрическая аугментация случайно
 

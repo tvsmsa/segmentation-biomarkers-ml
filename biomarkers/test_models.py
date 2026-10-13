@@ -1,16 +1,19 @@
 import os
+
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
-import pandas as pd
-import numpy as np
-from tqdm import tqdm
 from torch.utils.data import DataLoader
+from tqdm import tqdm
+from transformers import SegformerForSemanticSegmentation
+
 from biomarkers.config import Config
 from biomarkers.dataloader import ImageMaskDataset
-from transformers import SegformerForSemanticSegmentation
-from biomarkers.metrics import print_class_metrics, compute_per_class_metrics
+from biomarkers.metrics import compute_per_class_metrics, print_class_metrics
 
 config = Config()
+
 
 @torch.no_grad()
 def load_model(model_path, model_type="segformer"):
@@ -21,7 +24,7 @@ def load_model(model_path, model_type="segformer"):
         model = SegformerForSemanticSegmentation.from_pretrained(
             "nvidia/segformer-b2-finetuned-ade-512-512",
             num_labels=config.NUM_CLASSES,
-            ignore_mismatched_sizes=True
+            ignore_mismatched_sizes=True,
         ).to(config.DEVICE)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
@@ -29,14 +32,14 @@ def load_model(model_path, model_type="segformer"):
     # Загружаем веса
     checkpoint = torch.load(model_path, map_location=config.DEVICE)
 
-    if 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
-        epoch = checkpoint.get('epoch', 'unknown')
-        val_dice = checkpoint.get('val_dice', 'unknown')
+    if "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+        epoch = checkpoint.get("epoch", "unknown")
+        val_dice = checkpoint.get("val_dice", "unknown")
         print(f"Loaded checkpoint from epoch {epoch}, val_dice: {val_dice}")
     else:
         model.load_state_dict(checkpoint)
-        print(f"Loaded model weights (no checkpoint metadata)")
+        print("Loaded model weights (no checkpoint metadata)")
 
     model.eval()
     return model
@@ -58,7 +61,7 @@ def test_model(model, test_loader, model_name="Model", save_results=True):
             imgs = imgs.to(config.DEVICE)
             masks = masks.to(config.DEVICE)
 
-            if hasattr(model, 'segformer'):
+            if hasattr(model, "segformer"):
                 outputs = model(pixel_values=imgs)
                 logits = outputs.logits
             else:
@@ -67,10 +70,7 @@ def test_model(model, test_loader, model_name="Model", save_results=True):
             # Интерполяция
             if logits.shape[-2:] != masks.shape[-2:]:
                 logits = F.interpolate(
-                    logits,
-                    size=masks.shape[-2:],
-                    mode="bilinear",
-                    align_corners=False
+                    logits, size=masks.shape[-2:], mode="bilinear", align_corners=False
                 )
 
             preds = logits.argmax(dim=1)  # (B, H, W)
@@ -85,14 +85,16 @@ def test_model(model, test_loader, model_name="Model", save_results=True):
         all_preds,
         all_targets,
         num_classes=config.NUM_CLASSES,
-        ignore_index=config.IGNORE_INDEX
+        ignore_index=config.IGNORE_INDEX,
     )
 
     id_to_class = {v: k for k, v in config.CLASS_TO_ID.items()}
     id_to_class[0] = "background"
 
     # Выводим результаты
-    mean_dice = print_class_metrics(metrics, id_to_class, title=f"Metrics for {model_name}")
+    mean_dice = print_class_metrics(
+        metrics, id_to_class, title=f"Metrics for {model_name}"
+    )
 
     if save_results:
         save_test_results(metrics, id_to_class, model_name, mean_dice)
@@ -112,24 +114,26 @@ def save_test_results(metrics, id_to_class, model_name, mean_dice):
         if class_id == 0:
             continue
         row = {
-            'model': model_name,
-            'class_name': class_name,
-            'iou': metrics['iou'].get(class_id, 0.0),
-            'dice': metrics['dice'].get(class_id, 0.0),
-            'precision': metrics['precision'].get(class_id, 0.0),
-            'recall': metrics['recall'].get(class_id, 0.0)
+            "model": model_name,
+            "class_name": class_name,
+            "iou": metrics["iou"].get(class_id, 0.0),
+            "dice": metrics["dice"].get(class_id, 0.0),
+            "precision": metrics["precision"].get(class_id, 0.0),
+            "recall": metrics["recall"].get(class_id, 0.0),
         }
         rows.append(row)
 
     # Средние значения
-    rows.append({
-        'model': model_name,
-        'class_name': 'MEAN',
-        'iou': np.mean(list(metrics['iou'].values())),
-        'dice': mean_dice,
-        'precision': np.mean(list(metrics['precision'].values())),
-        'recall': np.mean(list(metrics['recall'].values()))
-    })
+    rows.append(
+        {
+            "model": model_name,
+            "class_name": "MEAN",
+            "iou": np.mean(list(metrics["iou"].values())),
+            "dice": mean_dice,
+            "precision": np.mean(list(metrics["precision"].values())),
+            "recall": np.mean(list(metrics["recall"].values())),
+        }
+    )
 
     df = pd.DataFrame(rows)
     csv_path = os.path.join(results_dir, f"{model_name}_test_results.csv")
@@ -157,7 +161,7 @@ def main():
         batch_size=config.BATCH_SIZE,
         shuffle=False,
         num_workers=4,
-        pin_memory=True
+        pin_memory=True,
     )
 
     model = load_model(MODEL_PATH, MODEL_TYPE)

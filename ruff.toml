@@ -1,0 +1,15 @@
+# Keep code compatible with the existing ML dependencies.
+target-version = "py38"
+line-length = 88
+
+[lint]
+# Syntax errors, common mistakes, and consistent import ordering.
+select = ["E4", "E7", "E9", "F", "I"]
+
+[lint.isort]
+known-first-party = ["biomarkers"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

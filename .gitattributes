@@ -1,0 +1,5 @@
+# Match Ruff's output on Windows, Linux, and macOS.
+*.py text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf

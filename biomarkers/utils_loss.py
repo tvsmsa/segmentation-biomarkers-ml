@@ -1,13 +1,16 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from biomarkers.config import Config
 
 config = Config()
 
 
 class TverskyLoss(nn.Module):
-    def __init__(self, alpha=0.7, beta=0.3, smooth=1e-6, ignore_index=config.IGNORE_INDEX):
+    def __init__(
+        self, alpha=0.7, beta=0.3, smooth=1e-6, ignore_index=config.IGNORE_INDEX
+    ):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
@@ -23,12 +26,13 @@ class TverskyLoss(nn.Module):
         probs = torch.softmax(logits, dim=1)  # [B, C, H, W]
 
         # Маска валидных пикселей
-        valid_mask = (targets != self.ignore_index)  # [B, H, W]
+        valid_mask = targets != self.ignore_index  # [B, H, W]
 
         # one-hot кодирование targets: [B, C, H, W]
         with torch.no_grad():
-            targets_onehot = F.one_hot(targets.clamp(
-                0, num_classes-1), num_classes).permute(0, 3, 1, 2)
+            targets_onehot = F.one_hot(
+                targets.clamp(0, num_classes - 1), num_classes
+            ).permute(0, 3, 1, 2)
             targets_onehot = targets_onehot.float() * valid_mask.unsqueeze(1).float()
 
         probs = probs * valid_mask.unsqueeze(1).float()
@@ -38,8 +42,9 @@ class TverskyLoss(nn.Module):
         FP = (probs * (1 - targets_onehot)).sum(dim=(0, 2, 3))
         FN = ((1 - probs) * targets_onehot).sum(dim=(0, 2, 3))
 
-        tversky = (TP + self.smooth) / (TP + self.alpha *
-                                        FN + self.beta * FP + self.smooth)
+        tversky = (TP + self.smooth) / (
+            TP + self.alpha * FN + self.beta * FP + self.smooth
+        )
         # исключаем класс background (0)
         tversky = tversky[1:]
 
@@ -51,6 +56,7 @@ class FocalLoss(nn.Module):
     """
     Focal Loss: динамически увеличивает вес ошибок на трудно-классифицируемых пикселях
     """
+
     def __init__(self, gamma=2.0, smooth=1e-6, ignore_index=config.IGNORE_INDEX):
         super().__init__()
         self.gamma = gamma
@@ -68,14 +74,15 @@ class FocalLoss(nn.Module):
         probs = torch.softmax(logits, dim=1)  # [B, C, H, W]
 
         # Маска валидных пикселей (исключаем ignore_index)
-        valid_mask = (targets != self.ignore_index)  # [B, H, W]
+        valid_mask = targets != self.ignore_index  # [B, H, W]
 
         # One-hot метки
         with torch.no_grad():
-            targets_onehot = F.one_hot(
-                targets.clamp(0, num_classes - 1),
-                num_classes
-            ).permute(0, 3, 1, 2).float()  # [B, C, H, W]
+            targets_onehot = (
+                F.one_hot(targets.clamp(0, num_classes - 1), num_classes)
+                .permute(0, 3, 1, 2)
+                .float()
+            )  # [B, C, H, W]
             targets_onehot = targets_onehot * valid_mask.unsqueeze(1).float()
 
         # Применяем маску к вероятностям

@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class Config():
+class Config:
     #: игнорируем цвет
     IGNORE_INDEX = 255
     #: размер патча
@@ -36,8 +36,9 @@ class Config():
     }
 
     BACKGROUND_CLASSES = ["ERROR", "OD", "background"]
-    FOREGROUND_CLASSES = [cls for cls in CLASSES.keys() if cls not in [
-        "ERROR", "OD", "background"]]
+    FOREGROUND_CLASSES = [
+        cls for cls in CLASSES.keys() if cls not in ["ERROR", "OD", "background"]
+    ]
     NUM_CLASSES = len(FOREGROUND_CLASSES) + 1  # + background
     CLASS_TO_ID = {cls: i + 1 for i, cls in enumerate(FOREGROUND_CLASSES)}
 

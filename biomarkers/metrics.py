@@ -1,8 +1,10 @@
-import torch
 import numpy as np
+import torch
+
 from biomarkers.config import Config
 
 config = Config()
+
 
 @torch.no_grad()
 def dice_score_fast(preds, targets, ignore_index=config.IGNORE_INDEX):
@@ -19,11 +21,11 @@ def dice_score_fast(preds, targets, ignore_index=config.IGNORE_INDEX):
     eps = 1e-6
 
     for cls in range(1, num_classes):
-        pred_mask = (preds_labels == cls)
-        target_mask = (targets == cls)
+        pred_mask = preds_labels == cls
+        target_mask = targets == cls
 
         # игнорируем пиксели ignore_index
-        valid_mask = (targets != ignore_index)
+        valid_mask = targets != ignore_index
         pred_mask = pred_mask & valid_mask
         target_mask = target_mask & valid_mask
 
@@ -42,21 +44,19 @@ def dice_score_fast(preds, targets, ignore_index=config.IGNORE_INDEX):
         return 0.0
     return dice_sum / count
 
+
 def compute_per_class_metrics(preds, targets, num_classes, ignore_index=255):
     """
     Метрики для каждого класса
     """
     if preds.shape != targets.shape:
-        raise ValueError(f"Shape mismatch: preds {preds.shape}, targets {targets.shape}")
+        raise ValueError(
+            f"Shape mismatch: preds {preds.shape}, targets {targets.shape}"
+        )
 
-    valid_mask = (targets != ignore_index)
+    valid_mask = targets != ignore_index
 
-    metrics = {
-        'iou': {},
-        'dice': {},
-        'precision': {},
-        'recall': {}
-    }
+    metrics = {"iou": {}, "dice": {}, "precision": {}, "recall": {}}
 
     for class_id in range(1, num_classes):
         pred_class = (preds == class_id) & valid_mask
@@ -72,26 +72,27 @@ def compute_per_class_metrics(preds, targets, num_classes, ignore_index=255):
         precision = TP / (TP + FP + eps)
         recall = TP / (TP + FN + eps)
 
-        metrics['iou'][class_id] = iou
-        metrics['dice'][class_id] = dice
-        metrics['precision'][class_id] = precision
-        metrics['recall'][class_id] = recall
+        metrics["iou"][class_id] = iou
+        metrics["dice"][class_id] = dice
+        metrics["precision"][class_id] = precision
+        metrics["recall"][class_id] = recall
 
     return metrics
+
 
 def print_class_metrics(metrics, class_names, title):
     """
     Выводит метрики
     """
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"{title}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     # Сортируем классы по имени
     sorted_classes = sorted(class_names.items(), key=lambda x: x[1])
 
     print(f"{'Class':<30} {'IoU':<8} {'Dice':<8} {'Precision':<10} {'Recall':<10}")
-    print(f"{'-'*30} {'-'*8} {'-'*8} {'-'*10} {'-'*10}")
+    print(f"{'-' * 30} {'-' * 8} {'-' * 8} {'-' * 10} {'-' * 10}")
 
     iou_values = []
     dice_values = []
@@ -100,18 +101,20 @@ def print_class_metrics(metrics, class_names, title):
         if class_id == 0:  # пропускаем фон
             continue
 
-        iou = metrics['iou'].get(class_id, 0.0)
-        dice = metrics['dice'].get(class_id, 0.0)
-        precision = metrics['precision'].get(class_id, 0.0)
-        recall = metrics['recall'].get(class_id, 0.0)
+        iou = metrics["iou"].get(class_id, 0.0)
+        dice = metrics["dice"].get(class_id, 0.0)
+        precision = metrics["precision"].get(class_id, 0.0)
+        recall = metrics["recall"].get(class_id, 0.0)
 
         iou_values.append(iou)
         dice_values.append(dice)
         dice_str = f"{dice:<8.4f}"
-        print(f"{class_name:<30} {iou:<8.4f} {dice_str:<10} {precision:<10.4f} {recall:<10.4f}")
+        print(
+            f"{class_name:<30} {iou:<8.4f} {dice_str:<10} {precision:<10.4f} {recall:<10.4f}"
+        )
 
-    print(f"{'-'*30} {'-'*8} {'-'*8} {'-'*10} {'-'*10}")
+    print(f"{'-' * 30} {'-' * 8} {'-' * 8} {'-' * 10} {'-' * 10}")
     print(f"{'MEAN':<30} {np.mean(iou_values):<8.4f} {np.mean(dice_values):<8.4f}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     return np.mean(dice_values)
