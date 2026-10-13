@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { email = "karab1n.andrei@mail.ru" }
 ]
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi==0.95.0",
     "matplotlib==3.7.1",
@@ -24,9 +24,11 @@ dependencies = [
     "uvicorn==0.21.1",
 ]
 
-[project.scripts]
-segmentation-biomarkers-ml = "segmentation_biomarkers_ml:main"
+[tool.uv]
+package = false
 
-[build-system]
-requires = ["uv_build>=0.12.18,<0.13.0"]
-build-backend = "uv_build"
+[dependency-groups]
+dev = [
+    "pre-commit==4.7",
+    "ruff==0.17.0",
+]
