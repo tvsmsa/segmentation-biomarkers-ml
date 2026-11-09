@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from transformers import SegformerForSemanticSegmentation
 
-from biomarkers.config import Config
+from config import Config
 
 
 class ModelType(Enum):
@@ -219,7 +219,7 @@ def visualize_prediction(image, gt_mask, pred_mask, save_path=None):
 
 def main():
     # === Настройки ===
-    MODEL_PATH = "D:/datasets/segformer_fold_1.pth"
+    MODEL_PATH = "D:/models/segformer_tversky/seg_tversk_val_fold_1.pth"
     TEST_CSV = "D:/aspirantura/PROF/npy_article_fold/train_article_fold_1.csv"
 
     IMAGE_DIR = "D:/aspirantura/PROF/npy_article_fold/fold_1/images"
